@@ -1,0 +1,12 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { api, setToken } from './api';
+
+export default function MentorPortal() {
+  const [rows, setRows] = useState([]);
+  const [message, setMessage] = useState('');
+  const [workingId, setWorkingId] = useState(null);
+  const load = useCallback(async () => { try { const response = await api.get('/api/mentor/outpasses'); setRows(response.data.data); } catch (error) { setMessage(error.response?.data?.message || 'Could not load requests.'); } }, []);
+  useEffect(() => { load(); }, [load]);
+  const verify = async (id) => { setWorkingId(id); try { const response = await api.put(`/api/mentor/outpasses/${id}/verify`); setRows((current) => current.filter((row) => row.id !== id)); setMessage(response.data.message); } catch (error) { setMessage(error.response?.data?.message || 'Could not verify this request.'); } finally { setWorkingId(null); } };
+  return <main className="page"><header className="page-head"><div><p className="eyebrow">Parent confirmation</p><h1>Mentor verification</h1><p>Verify that a parent has been called before forwarding the request to the HOD.</p></div><button className="secondary" onClick={() => { setToken('MENTOR', null); window.location.reload(); }}>Sign out</button></header>{message && <div className="alert">{message}</div>}<section className="card table-wrap"><div className="table-heading"><div><p className="eyebrow">Verification queue</p><h2>Pending requests</h2></div><button className="secondary" onClick={load}>Refresh</button></div><table><thead><tr><th>Student</th><th>Destination</th><th>Reason</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><strong>{row.student.name}</strong><small>{row.student.rollNo}</small></td><td>{row.destination}</td><td>{row.reason}</td><td><button disabled={workingId === row.id} onClick={() => verify(row.id)}>{workingId === row.id ? 'Verifying…' : 'Verify (Parents Called)'}</button></td></tr>)}</tbody></table>{!rows.length && <p className="empty">No requests are awaiting mentor verification.</p>}</section></main>;
+}
