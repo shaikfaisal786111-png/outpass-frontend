@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { api } from './api';
 
 export default function MentorPortal() {
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [token, setToken] = useState(localStorage.getItem('mentor_token') || localStorage.getItem('token') || '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [outpasses, setOutpasses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
-
-  const API_BASE = import.meta.env.VITE_API_URL || 'https://outpass-backend.onrender.com';
 
   useEffect(() => {
     if (token) {
@@ -22,35 +21,31 @@ export default function MentorPortal() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+      const response = await api.post('/api/auth/login', {
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
+        role: 'MENTOR'
       });
 
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned a non-JSON response. Please check backend status.');
-      }
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Login failed');
+      const data = response.data;
 
       if (data.user?.role !== 'MENTOR') {
         throw new Error('Access denied. Mentor privileges required.');
       }
 
+      localStorage.setItem('mentor_token', data.token);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       setToken(data.token);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || 'Login failed. Please check credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('mentor_token');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken('');
@@ -61,25 +56,15 @@ export default function MentorPortal() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/mentor/outpasses`, {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        }
+      const response = await api.get('/api/mentor/outpasses', {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server route error (404/500). Please check backend deployment.');
-      }
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to fetch outpasses');
-
+      const data = response.data;
       const items = Array.isArray(data) ? data : (data.outpasses || data.data || []);
       setOutpasses(items);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || 'Failed to fetch outpasses.');
     } finally {
       setLoading(false);
     }
@@ -89,25 +74,13 @@ export default function MentorPortal() {
     setActionLoading(id);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/mentor/outpasses/${id}/verify`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
+      await api.put(`/api/mentor/outpasses/${id}/verify`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server verification failed. Please try again.');
-      }
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to verify request');
 
       setOutpasses((prev) => prev.filter((item) => item.id !== id));
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || 'Server verification failed.');
     } finally {
       setActionLoading(null);
     }
@@ -131,7 +104,7 @@ export default function MentorPortal() {
               <input
                 id="email"
                 type="email"
-                placeholder="mentor@college.edu"
+                placeholder="mentor@cmrec.ac.in"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
